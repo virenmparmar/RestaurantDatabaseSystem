@@ -129,8 +129,31 @@ def findEmail(email):
     isvalid = query_db(sql_search_query)['found'].loc[0]
     return isvalid
 
+def countAddress(email):
+    sql_count_address = f'Select count(*) as address from users_address where u_email = \'{email}\';'
+    count = query_db(sql_count_address)['address'].loc[0]
+    return count
+
+def queryAddress(email):
+    sql_find_address = f'select a.address_line as line, a.city as city, a.state as state, a.zipcode as zip from users_address ua, address a  where ua.u_email = \'{email}\' and ua.Address_line = a.address_line and ua.city = a.city;'
+    return query_db(sql_find_address)
+
+def countReviews(email):
+    sql_count_reviews = f'select count(*) as reviews from reviews where User_email = \'{email}\';'
+    count = query_db(sql_count_reviews)['reviews'].loc[0]
+    return count
+
+def findRestByZip(zipcode):
+    sql_find_rest = f'select r.restuarant_name as Name, a.address_line AS Address, a.city as City, a.zipcode as Zipcode from restaurant r, restaurant_address ra, address a where a.zipcode = {zipcode} and r.Restaurant_id = ra.Reataurant_id and ra.Address_line = a.address_line and ra.city = a.city;'
+    return query_db(sql_find_rest)
+
+def findRestByCity(city):
+    sql_find_rest = f'select r.restuarant_name, ra.address_line, ra.city from restaurant r, restaurant_address ra where ra.city = \'{city}\'and r.Restaurant_id = ra.Reataurant_id;'
+    return query_db(sql_find_rest)
+
+
 def main():
-    menu = ['New User' , 'Reserve a table', 'Add an address', 'Add a review','View All reviews','Search for restaurants']
+    menu = ['New User' , 'Reserve a table', 'Add an address', 'Add a review','View All reviews','Search for restaurants','User Profile', 'Search Restaurant']
     choice = st.sidebar.selectbox('Menu',menu)
     isvalid = 0
 
@@ -222,6 +245,51 @@ def main():
         service = st.slider('Service: ',0,5) 
         overallExperience = st.slider('Overall Experience',0,5) 
         description = st.text_input('Review', max_chars=256)
+    elif choice == 'User Profile':
+        email =  st.text_input('Email ', max_chars=128)
+        isvalid = 0
+        if(email):
+            isvalid = findEmail(email)
+            if isvalid == 0:
+                st.error("User not found")
+            
+            st.write('You have ' + str(countAddress(email)) + ' address registered!')
+            st.write('\n\n Address ')
+            st.dataframe(queryAddress(email))
+
+            st.write('You have posted ' + str(countReviews(email)) + ' reviews.')
+    elif choice == 'Search Restaurant':
+        searchAttribute = st.selectbox('Find Restaurant by ', ['Zip code', 'City', 'Reviews'])
+        if searchAttribute:
+            if searchAttribute == 'Zip code':
+                zipcode  = st.number_input('Zip Code: ', min_value=10000, max_value=99999, value=99999)
+                if zipcode:
+                    st.write(findRestByZip(zipcode))
+            elif searchAttribute == 'City':
+                city_search = st.text_input('City: ', max_chars=64)
+                if city_search:
+                    try:
+                        sql_find_city = f'select distinct(ra.city) as city from restaurant_address ra where lower(ra.city) like \'%{city_search.lower()}%\';'
+
+                        cities = query_db(sql_find_city)
+
+                        city =   st.selectbox("Choose a restaurant", cities['city'].tolist())
+                        if city:
+                            st.write(findRestByCity(city))
+                    except Exception as e:
+                        st.write(e)
+                        st.write('Something went wrong.')
+            elif searchAttribute == 'Reviews':
+                priority = st.selectbox('What is your priority' , ['Ambience', 'Food quality','Service'])
+                if priority:
+                    if priority == 'Ambience':
+                        sql_search_rest = f'select re.restuarant_name, ra.address_line, ra.city from reviews r, restaurant re, restaurant_address ra where (r.ambience >= r.food_quality or r.ambience >= r.service) and r.Restaurant_id = re.Restaurant_id and r.Restaurant_id = ra.Reataurant_id;' 
+                    elif priority == 'Food quality':
+                        sql_search_rest = f'select re.restuarant_name, ra.address_line, ra.city from reviews r, restaurant re, restaurant_address ra where (r.food_quality >= r.ambience or r.food_quality >= r.service) and r.Restaurant_id = re.Restaurant_id and r.Restaurant_id = ra.Reataurant_id;'
+                    elif priority == 'Service':
+                        sql_search_rest = f'select re.restuarant_name, ra.address_line, ra.city from reviews r, restaurant re, restaurant_address ra where (r.service >= r.ambience or r.service >= r.food_quality) and r.Restaurant_id = re.Restaurant_id and r.Restaurant_id = ra.Reataurant_id;'
+                    st.write(query_db(sql_search_rest))
+
 
 
 if __name__ == '__main__':
