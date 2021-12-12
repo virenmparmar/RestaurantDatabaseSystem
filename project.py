@@ -29,6 +29,7 @@ def checkEmail(email):
 
 @st.cache
 def query_db(sql: str):
+    print(sql)
     # print(f'Running query_db(): {sql}')
 
     db_info = get_config()
@@ -60,6 +61,7 @@ def query_db(sql: str):
 
 @st.cache
 def insert_query_db(sql: str):
+    print(sql)
     # print(f'Running query_db(): {sql}')
 
     db_info = get_config()
@@ -81,17 +83,16 @@ def insert_query_db(sql: str):
     conn.close()
     return
 
-def insertUser(email, name, mobileNumber, dateOfBirth):
-    
+def insertUser(email, name, mobileNumber, dateOfBirth): 
     checkEmail(email)
-
     if(dateOfBirth>datetime.date.today()):
         st.error('Date is invalid')
-    sql_insert_user = 'insert into users values ( \'' + email + '\' , \'' + str(mobileNumber) + '\' , ' + name + ' , \'' + str(dateOfBirth) + '\' );'
+    sql_insert_user = 'insert into users (email, name, phone, dob)values ( \'' + email + '\' , \'' + name + '\' , ' + str(mobileNumber) + ' , \'' + str(dateOfBirth) + '\' );'
     try:
         df = insert_query_db(sql_insert_user)
         st.write('User Created!')
     except Exception as e:
+        print(e)
         st.write(
             "Sorry! Something went wrong with your query, please try again."
         )
@@ -124,6 +125,12 @@ def addAddress(userOrRestaurant, email, restaurantId, addressLine, city, state, 
         )
     return
 
+def insertReview(email, business_id, ambience, foodQuality, service, overallExperience, description):
+    sql_insert_review = f'insert into reviews (ambience, food_quality, service, overall_experience, description, user_email, restaurant_id) values ( {ambience}, {foodQuality}, {service}, {overallExperience}, \'{description}\', \'{email}\', \'{business_id.strip()}\');'
+    df = insert_query_db(sql_insert_review)
+    st.write('Review submitted')
+    return
+
 def findEmail(email):
     sql_search_query = 'select count(1) as found from users where email = \'' + email + '\';'
     isvalid = query_db(sql_search_query)['found'].loc[0]
@@ -151,20 +158,39 @@ def findRestByCity(city):
     sql_find_rest = f'select r.restuarant_name, ra.address_line, ra.city from restaurant r, restaurant_address ra where ra.city = \'{city}\'and r.Restaurant_id = ra.Reataurant_id;'
     return query_db(sql_find_rest)
 
+def getReviews(business_id):
+    sql_find_reviews = f'select r.restuarant_name as Name, re.ambience as ambience, re.food_quality as FoodQuality, re.service as Service, re.overall_experience OverallExperience, re.description from reviews re,restaurant r  where re.restaurant_id = \'{business_id}\' and r.Restaurant_id = re.restaurant_id'
+    return query_db(sql_find_reviews)
+
+def getOperatingHours(business_id):
+    sql_get_operating_hours = f'select day , Time  from operating_hours where Restaurant_id  = \'{business_id.strip()}\''
+    return query_db(sql_get_operating_hours)
+
+def getCoupons(business_id):
+    sql_get_coupons = f'select c.Coupon_id as Coupon, c.Expiry_date  as expiry, c.Discount_amt as Discount from restaurant_coupons rc, coupons c, restaurant r where rc.Restaurant_id = \'{business_id.strip()}\' and  rc.Restaurant_id = r.Restaurant_id and rc.Coupon_id  = c.Coupon_id; '
+    return query_db(sql_get_coupons)
+
 
 def main():
-    menu = ['New User' , 'Reserve a table', 'Add an address', 'Add a review','View All reviews','Search for restaurants','User Profile', 'Search Restaurant']
+    menu = ['New User' , 'Reserve a table', 'Add an address', 'Add a review','View All reviews','User Profile', 'Search Restaurant', 'Operating hours', 'View Coupons', 'Analyse Data']
     choice = st.sidebar.selectbox('Menu',menu)
     isvalid = 0
 
     if choice == 'New User':
-        email = st.text_input('Email ', max_chars=128)
+        email = ''
+        email =  st.text_input('Email ', max_chars=128)
+        if(email):
+            isvalid = findEmail(email)
+            if isvalid == 1 :
+                st.error("User already registered")
         name = st.text_input('Name ', max_chars=128)
         mobileNumber = st.number_input('Mobile number', max_value=9999999999, min_value=1000000000)
         dateOfBirth = st.date_input('Date of Birth')
         if st.button('Submit'):
             insertUser(email, name, mobileNumber, dateOfBirth)
+            
     elif choice == 'Reserve a table':
+        email = ''
         email =  st.text_input('Email ', max_chars=128)
         if(email):
             isvalid = findEmail(email)
@@ -196,6 +222,7 @@ def main():
                 reserveTable(email, business_id, dateOfReservation, timeOfReservation, tableNo)
     
     elif choice == 'Add an address':
+        email = ''
         addressLine = ''
         city = ''
         state = ''
@@ -238,14 +265,38 @@ def main():
                 addAddress(userOrRestaurant, email, business_id, addressLine, city, state, zipcode)
     
     elif choice == 'Add a review':
-        email = st.text_input('Email: ', max_chars=128)
-        restaurantId = st.text_input('Restaurant Id: ', max_chars=32)
+        email = ''
+        email =  st.text_input('Email ', max_chars=128)
+        if(email):
+            isvalid = findEmail(email)
+            if isvalid == 0:
+                st.error("User not found")
+        restaurantName = st.text_input('Enter restaurant name: ')
+        restName =''
+        if restaurantName:
+            sql_find_rest = 'select Restaurant_id as id, restuarant_name as name from restaurant where lower(restuarant_name) like \'%' + restaurantName + '%\' ;'
+            
+            try:
+                restaurants = query_db(sql_find_rest)
+
+                restName =   st.selectbox("Choose a restaurant", restaurants['name'].tolist())
+                if restName:
+                    business_id = restaurants.loc[restaurants['name'] == restName, 'id'].iloc[0]
+            except Exception as e:
+                st.write(e)
+                st.write('Something went wrong.')
         ambience = st.slider('Ambience: ',0,5) 
         foodQuality = st.slider('Food Quality: ',0,5) 
         service = st.slider('Service: ',0,5) 
         overallExperience = st.slider('Overall Experience',0,5) 
         description = st.text_input('Review', max_chars=256)
+        if(email):
+            submit = st.button('Submit')
+            if submit:
+                insertReview(email, business_id, ambience, foodQuality, service, overallExperience, description)
+            
     elif choice == 'User Profile':
+        email = ''
         email =  st.text_input('Email ', max_chars=128)
         isvalid = 0
         if(email):
@@ -289,6 +340,68 @@ def main():
                     elif priority == 'Service':
                         sql_search_rest = f'select re.restuarant_name, ra.address_line, ra.city from reviews r, restaurant re, restaurant_address ra where (r.service >= r.ambience or r.service >= r.food_quality) and r.Restaurant_id = re.Restaurant_id and r.Restaurant_id = ra.Reataurant_id;'
                     st.write(query_db(sql_search_rest))
+    elif choice == 'View All reviews':
+        restaurantName = st.text_input('Enter restaurant name: ')
+        restName =''
+        business_id = None
+        if restaurantName:
+            sql_find_rest = 'select Restaurant_id as id, restuarant_name as name from restaurant where lower(restuarant_name) like \'%' + restaurantName + '%\' ;'
+            
+            try:
+                restaurants = query_db(sql_find_rest)
+
+                restName =   st.selectbox("Choose a restaurant", restaurants['name'].tolist())
+                if restName:
+                    business_id = restaurants.loc[restaurants['name'] == restName, 'id'].iloc[0]
+            except Exception as e:
+                st.write(e)
+                st.write('Something went wrong.')
+        if business_id:
+            st.dataframe(getReviews(business_id))
+    elif choice =='Operating hours':
+        restaurantName = st.text_input('Enter restaurant name: ')
+        restName =''
+        business_id = None
+        if restaurantName:
+            sql_find_rest = 'select Restaurant_id as id, restuarant_name as name from restaurant where lower(restuarant_name) like \'%' + restaurantName + '%\' ;'
+            
+            try:
+                restaurants = query_db(sql_find_rest)
+
+                restName =   st.selectbox("Choose a restaurant", restaurants['name'].tolist())
+                if restName:
+                    business_id = restaurants.loc[restaurants['name'] == restName, 'id'].iloc[0]
+            except Exception as e:
+                st.write(e)
+                st.write('Something went wrong.')
+        if business_id:
+            st.dataframe(getOperatingHours(business_id))
+    elif choice =='View Coupons':
+        restaurantName = st.text_input('Enter restaurant name: ')
+        restName =''
+        business_id = None
+        if restaurantName:
+            sql_find_rest = 'select Restaurant_id as id, restuarant_name as name from restaurant where lower(restuarant_name) like \'%' + restaurantName + '%\' ;'
+            
+            try:
+                restaurants = query_db(sql_find_rest)
+
+                restName =   st.selectbox("Choose a restaurant", restaurants['name'].tolist())
+                if restName:
+                    business_id = restaurants.loc[restaurants['name'] == restName, 'id'].iloc[0]
+            except Exception as e:
+                st.write(e)
+                st.write('Something went wrong.')
+        if business_id:
+            st.dataframe(getCoupons(business_id))
+    elif choice =='Analyse Data':
+        restGroupBy = st.selectbox('Analyse by', ['','Rating', 'City'])
+        if restGroupBy == 'Rating':
+            sql_group_by_rating = f'select CEILING((ambience + food_quality + service + overall_experience)/4) as Rating, count(*) as count from reviews group by rating;'
+            st.dataframe(query_db(sql_group_by_rating))
+        elif restGroupBy == 'City':
+            sql_group_by_city = f'select city, count(*) as count from restaurant_address group by city order by city;'
+            st.dataframe(query_db(sql_group_by_city))
 
 
 
