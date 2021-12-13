@@ -13,8 +13,9 @@ from streamlit.type_util import OptionSequence
 regex = '^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w+$'  
 
 
+
 @st.cache
-def get_config(filename="database.ini", section="postgresql"):
+def get_config(filename="/home/vmp2018/project_demo/database.ini", section="postgresql"):
     parser = ConfigParser()
     parser.read(filename)
     return {k: v for k, v in parser.items(section)}
@@ -27,7 +28,7 @@ def checkEmail(email):
         if(not re.search(regex,email)):
             st.error('Invalid email id')
 
-@st.cache
+
 def query_db(sql: str):
     print(sql)
     # print(f'Running query_db(): {sql}')
@@ -59,7 +60,7 @@ def query_db(sql: str):
 
     return df
 
-@st.cache
+
 def insert_query_db(sql: str):
     print(sql)
     # print(f'Running query_db(): {sql}')
@@ -87,7 +88,7 @@ def insertUser(email, name, mobileNumber, dateOfBirth):
     checkEmail(email)
     if(dateOfBirth>datetime.date.today()):
         st.error('Date is invalid')
-    sql_insert_user = 'insert into users (email, name, phone, dob)values ( \'' + email + '\' , \'' + name + '\' , ' + str(mobileNumber) + ' , \'' + str(dateOfBirth) + '\' );'
+    sql_insert_user = 'insert into users (email, name, phone, dob)values ( \'' + email.strip() + '\' , \'' + name.strip() + '\' , ' + str(mobileNumber) + ' , \'' + str(dateOfBirth) + '\' );'
     try:
         df = insert_query_db(sql_insert_user)
         st.write('User Created!')
@@ -100,7 +101,7 @@ def insertUser(email, name, mobileNumber, dateOfBirth):
 
 
 def reserveTable(email, business_id, dateOfReservation, timeOfReservation, tableNo):
-    sql_insert_reservation = f'insert into reservations (date_reserved, time_reserved, Table_no, User_email, Restaurant_id) values (\'{str(dateOfReservation)}\' , \'{str(timeOfReservation)}\' , {str(tableNo)}, \'{email}\', \'{business_id}\' );' 
+    sql_insert_reservation = f'insert into reservations (date_reserved, time_reserved, Table_no, User_email, Restaurant_id) values (\'{str(dateOfReservation)}\' , \'{str(timeOfReservation)}\' , {str(tableNo)}, \'{email.strip()}\', \'{business_id.strip()}\' );' 
     try:
         df = insert_query_db(sql_insert_reservation)
         st.write('Reservation Successfull!')
@@ -111,12 +112,12 @@ def reserveTable(email, business_id, dateOfReservation, timeOfReservation, table
     return  
 
 def addAddress(userOrRestaurant, email, restaurantId, addressLine, city, state, zipcode):
-    sql_insert_address = f'insert into address (address_line, city, state, zipcode) values (\'{addressLine}\', \'{city}\', \'{state}\', {str(zipcode)} ); \n'
+    sql_insert_address = f'insert into address (address_line, city, state, zipcode) values (\'{addressLine.strip()}\', \'{city.strip()}\', \'{state.strip()}\', {str(zipcode)} ); \n'
     try:
         if userOrRestaurant  == 'User':
-            sql_insert_address  = sql_insert_address + f'insert into users_address (U_email, Address_line, City ) values ( \'{email}\', \'{addressLine}\', \'{city}\');'
+            sql_insert_address  = sql_insert_address + f'insert into users_address (U_email, Address_line, City ) values ( \'{email.strip()}\', \'{addressLine.strip()}\', \'{city.strip()}\');'
         if userOrRestaurant == 'Restaurant':
-            sql_insert_address = sql_insert_address  + f'insert into restaurant_address(Reataurant_id, Address_line, City ) values ( \'{restaurantId}\' , \'{addressLine}\' , \'{city}\');'
+            sql_insert_address = sql_insert_address  + f'insert into restaurant_address(Reataurant_id, Address_line, City ) values ( \'{restaurantId.strip()}\' , \'{addressLine.strip()}\' , \'{city.strip()}\');'
         df = insert_query_db(sql_insert_address)
         st.write('Address saved successfully!')
     except Exception as e:
@@ -166,15 +167,15 @@ def getOperatingHours(business_id):
     sql_get_operating_hours = f'select day , Time  from operating_hours where Restaurant_id  = \'{business_id.strip()}\''
     return query_db(sql_get_operating_hours)
 
-def getCoupons(business_id):
-    sql_get_coupons = f'select c.Coupon_id as Coupon, c.Expiry_date  as expiry, c.Discount_amt as Discount from restaurant_coupons rc, coupons c, restaurant r where rc.Restaurant_id = \'{business_id.strip()}\' and  rc.Restaurant_id = r.Restaurant_id and rc.Coupon_id  = c.Coupon_id; '
+def getCoupons(email):
+    sql_get_coupons = f'select c.Coupon_id as Coupon, c.Expiry_date  as expiry, c.Discount_amt as Discount from coupons c, user_coupons uc where uc.user_email = \'{email.strip()}\' and  uc.Coupon_id = c.Coupon_id;'
     return query_db(sql_get_coupons)
 
 
 def main():
     menu = ['New User' , 'Reserve a table', 'Add an address', 'Add a review','View All reviews','User Profile', 'Search Restaurant', 'Operating hours', 'View Coupons', 'Analyse Data']
     choice = st.sidebar.selectbox('Menu',menu)
-    isvalid = 0
+    isvalid = 1
 
     if choice == 'New User':
         email = ''
@@ -186,14 +187,16 @@ def main():
         name = st.text_input('Name ', max_chars=128)
         mobileNumber = st.number_input('Mobile number', max_value=9999999999, min_value=1000000000)
         dateOfBirth = st.date_input('Date of Birth')
-        if st.button('Submit'):
-            insertUser(email, name, mobileNumber, dateOfBirth)
+        if isvalid == 0:
+            if st.button('Submit'):
+                insertUser(email, name, mobileNumber, dateOfBirth)
             
     elif choice == 'Reserve a table':
-        email = ''
-        email =  st.text_input('Email ', max_chars=128)
-        if(email):
-            isvalid = findEmail(email)
+        email_r = ''
+        email_r =  st.text_input('Email ', max_chars=128)
+        isvalid = 0
+        if(email_r):
+            isvalid = findEmail(email_r)
             if isvalid == 0:
                 st.error("User not found")
 
@@ -266,11 +269,12 @@ def main():
     
     elif choice == 'Add a review':
         email = ''
+        isvalid = 0
         email =  st.text_input('Email ', max_chars=128)
         if(email):
             isvalid = findEmail(email)
             if isvalid == 0:
-                st.error("User not found")
+                st.write("User not found")
         restaurantName = st.text_input('Enter restaurant name: ')
         restName =''
         if restaurantName:
@@ -290,7 +294,7 @@ def main():
         service = st.slider('Service: ',0,5) 
         overallExperience = st.slider('Overall Experience',0,5) 
         description = st.text_input('Review', max_chars=256)
-        if(email):
+        if isvalid == 1:
             submit = st.button('Submit')
             if submit:
                 insertReview(email, business_id, ambience, foodQuality, service, overallExperience, description)
@@ -377,23 +381,15 @@ def main():
         if business_id:
             st.dataframe(getOperatingHours(business_id))
     elif choice =='View Coupons':
-        restaurantName = st.text_input('Enter restaurant name: ')
-        restName =''
-        business_id = None
-        if restaurantName:
-            sql_find_rest = 'select Restaurant_id as id, restuarant_name as name from restaurant where lower(restuarant_name) like \'%' + restaurantName + '%\' ;'
-            
-            try:
-                restaurants = query_db(sql_find_rest)
-
-                restName =   st.selectbox("Choose a restaurant", restaurants['name'].tolist())
-                if restName:
-                    business_id = restaurants.loc[restaurants['name'] == restName, 'id'].iloc[0]
-            except Exception as e:
-                st.write(e)
-                st.write('Something went wrong.')
-        if business_id:
-            st.dataframe(getCoupons(business_id))
+        email = ''
+        isvalid = 0
+        email =  st.text_input('Email ', max_chars=128)
+        if(email):
+            isvalid = findEmail(email)
+            if isvalid == 0:
+                st.write("User not found")
+            else:
+                st.dataframe(getCoupons(email))
     elif choice =='Analyse Data':
         restGroupBy = st.selectbox('Analyse by', ['','Rating', 'City'])
         if restGroupBy == 'Rating':
